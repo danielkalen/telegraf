@@ -19,6 +19,7 @@ const noop = () => {}
 class Telegraf extends Composer {
   constructor (token, options) {
     super()
+    this.msgHandlers = []
     this.options = Object.assign({}, DefaultOptions, options)
     this.token = token
     this.handleError = (err) => {
@@ -114,6 +115,18 @@ class Telegraf extends Composer {
 
   handleUpdate (update, webhookResponse) {
     debug('⚡ update', update.update_id)
+    if (this.msgHandlers.length) {
+      var cb, cbResult, reinsertQueue = [];
+      while (cb = this.msgHandlers.pop()) {
+        cbResult = cb(update);
+        if (cbResult === false) {
+          reinsertQueue.push(cb)
+        }
+      }
+      if (reinsertQueue.length) {
+        this.msgHandlers = this.msgHandlers.concat(reinsertQueue)
+      }
+    }
     const telegram = webhookResponse && this.webhookReply
       ? new Telegram(this.token, this.telegram.options, webhookResponse)
       : this.telegram
@@ -150,6 +163,10 @@ class Telegraf extends Composer {
         }
         this.fetchUpdates()
       })
+  }
+
+  onMessage (cb) {
+    this.msgHandlers.push(cb);
   }
 }
 
